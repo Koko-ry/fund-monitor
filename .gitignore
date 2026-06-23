@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+worker/node_modules/
+worker/.wrangler/
+fund_state.json
+daily_log.jsonl
+worker/wrangler.toml

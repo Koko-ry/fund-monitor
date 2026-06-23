@@ -1,0 +1,113 @@
+name: 手动更新基金状态
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "操作"
+        required: true
+        type: choice
+        options:
+          - status
+          - confirm
+          - buy
+          - sell
+          - setref
+          - unbuy
+          - remind
+          - skip
+          - pause
+          - resume
+          - resume-sell
+      fund_code:
+        description: "基金代码（status 可留空）"
+        required: false
+        type: string
+      value1:
+        description: "confirm=基金净值；buy=ETF价；sell=份数；setref=ETF价"
+        required: false
+        type: string
+      value2:
+        description: "buy=基金净值；sell=卖出净值"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fund-monitor-state
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 执行状态操作
+        env:
+          ACTION: ${{ inputs.action }}
+          FUND_CODE: ${{ inputs.fund_code }}
+          VALUE1: ${{ inputs.value1 }}
+          VALUE2: ${{ inputs.value2 }}
+          STATE_API_URL: ${{ secrets.STATE_API_URL }}
+          STATE_API_TOKEN: ${{ secrets.STATE_API_TOKEN }}
+        run: |
+          case "$ACTION" in
+            status)
+              python manage_state.py status
+              ;;
+            confirm)
+              if [ -n "$VALUE1" ]; then
+                python manage_state.py confirm "$FUND_CODE" "$VALUE1"
+              else
+                python manage_state.py confirm "$FUND_CODE"
+              fi
+              ;;
+            buy)
+              if [ -n "$VALUE2" ]; then
+                python manage_state.py buy "$FUND_CODE" "$VALUE1" "$VALUE2"
+              else
+                python manage_state.py buy "$FUND_CODE" "$VALUE1"
+              fi
+              ;;
+            sell)
+              python manage_state.py sell "$FUND_CODE" "$VALUE1" "$VALUE2"
+              ;;
+            setref)
+              python manage_state.py setref "$FUND_CODE" "$VALUE1"
+              ;;
+            unbuy)
+              python manage_state.py unbuy "$FUND_CODE"
+              ;;
+            remind|skip|pause|resume|resume-sell)
+              python manage_state.py "$ACTION" "$FUND_CODE"
+              ;;
+            *)
+              echo "未知操作: $ACTION"
+              exit 2
+              ;;
+          esac
+
+      - name: 持久化状态
+        if: vars.PERSIST_STATE_TO_REPO == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f fund_state.json daily_log.jsonl
+          if git diff --cached --quiet; then
+            echo "没有需要提交的变化"
+          else
+            git commit -m "chore: ${ACTION} fund state"
+            git push
+          fi
+        env:
+          ACTION: ${{ inputs.action }}

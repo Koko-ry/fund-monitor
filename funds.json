@@ -1,0 +1,13 @@
+[
+  {
+    "fund_code": "110020",
+    "fund_name": "易方达沪深300ETF联接A",
+    "etf_market": "sh",
+    "etf_code": "510300",
+    "total_shares": 10,
+    "trigger_pct": 4.0,
+    "enable_sell_signal": true,
+    "sell_profit_trigger_pct": 15.0,
+    "sell_drawdown_pct": 4.0
+  }
+]

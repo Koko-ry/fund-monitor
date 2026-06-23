@@ -1,0 +1,22 @@
+{
+  "YOUR_FUND_CODE": {
+    "anchor_etf_price": null,
+    "anchor_date": null,
+    "anchor_source": null,
+    "last_buy_price": null,
+    "last_buy_date": null,
+    "buy_history": [],
+    "sell_history": [],
+    "total_shares_bought": 0,
+    "total_shares_sold": 0,
+    "pending_signal": null,
+    "paused": false,
+    "snooze_until": null,
+    "skip_buy_below_price": null,
+    "feedback_history": [],
+    "sell_watch_high_etf_price": null,
+    "pending_sell_signal": null,
+    "sell_alert_paused": false,
+    "sell_snooze_until": null
+  }
+}

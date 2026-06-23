@@ -1,0 +1,70 @@
+name: 4%定投法每日监控
+
+on:
+  # 北京时间 14:40（UTC 06:40）。GitHub 定时任务可能延迟，预留申购时间。
+  schedule:
+    - cron: "40 6 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fund-monitor-state
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    if: vars.ENABLE_MONITOR == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 拉取代码和状态
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 运行测试
+        run: python -m unittest -v
+
+      - name: 检查反馈服务
+        env:
+          FEEDBACK_BASE_URL: ${{ secrets.FEEDBACK_BASE_URL }}
+        run: |
+          if [ -n "$FEEDBACK_BASE_URL" ]; then
+            curl -i -sS --max-time 20 "$FEEDBACK_BASE_URL/health" || true
+          fi
+
+      - name: 运行基金监控
+        id: monitor
+        continue-on-error: true
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          STATE_API_URL: ${{ secrets.STATE_API_URL }}
+          STATE_API_TOKEN: ${{ secrets.STATE_API_TOKEN }}
+          FEEDBACK_BASE_URL: ${{ secrets.FEEDBACK_BASE_URL }}
+          FEEDBACK_SIGNING_SECRET: ${{ secrets.FEEDBACK_SIGNING_SECRET }}
+        run: python fund_monitor_pushplus.py
+
+      - name: 持久化状态和日志
+        if: always() && vars.PERSIST_STATE_TO_REPO == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f fund_state.json daily_log.jsonl
+          if git diff --cached --quiet; then
+            echo "状态和日志无变化"
+          else
+            git commit -m "chore: update fund monitor state"
+            git push
+          fi
+
+      - name: 标记监控失败
+        if: steps.monitor.outcome == 'failure'
+        run: exit 1
