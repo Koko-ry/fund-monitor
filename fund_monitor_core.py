@@ -88,6 +88,7 @@ def default_state() -> dict:
         "pending_sell_signal": None,
         "sell_alert_paused": False,
         "sell_snooze_until": None,
+        "last_status_push_date": None,
     }
 
 

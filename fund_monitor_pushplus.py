@@ -15,10 +15,40 @@ from fund_monitor_core import (
     log,
     now_cn,
     run_analysis,
+    save_all_states,
 )
 
 
 PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "").strip()
+
+
+def has_actionable_notice(results: list[dict]) -> bool:
+    return any(
+        result.get("should_buy") or result.get("should_sell") or result.get("error")
+        for result in results
+    )
+
+
+def should_send_notification(results: list[dict], states: dict) -> bool:
+    if os.environ.get("GITHUB_EVENT_NAME") != "schedule":
+        return True
+    if has_actionable_notice(results):
+        return True
+
+    today = now_cn().date().isoformat()
+    for result in results:
+        code = result["fund_cfg"]["fund_code"]
+        if states.get(code, {}).get("last_status_push_date") != today:
+            return True
+    return False
+
+
+def mark_status_notification_sent(results: list[dict], states: dict) -> None:
+    today = now_cn().date().isoformat()
+    for result in results:
+        code = result["fund_cfg"]["fund_code"]
+        states.setdefault(code, {})["last_status_push_date"] = today
+    save_all_states(states)
 
 
 def build_pushplus_html(results: list[dict]) -> tuple[str, str]:
@@ -192,9 +222,15 @@ def main() -> int:
     configure_console()
     log("=== 4% 定投法监控启动 ===")
     try:
-        results, _states = run_analysis()
+        results, states = run_analysis()
         append_daily_log(results)
-        notification_ok = send_pushplus(results)
+        if should_send_notification(results, states):
+            notification_ok = send_pushplus(results)
+            if notification_ok and not has_actionable_notice(results):
+                mark_status_notification_sent(results, states)
+        else:
+            log("[通知] 今日普通状态已推送过，跳过重复推送")
+            notification_ok = True
     except Exception as exc:
         log(f"[致命错误] {exc}")
         return 1
